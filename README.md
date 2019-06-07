@@ -1,4 +1,4 @@
-# Oxide
+# O X I D E
 Pentesting Bash Wrapper
 
 Oxide is a "one-file" highly portable bash script that can be used to perform external vulnerability assessments.
