@@ -1,7 +1,7 @@
-# Sc-21 
+# Oxide
 Pentesting Bash Wrapper
 
-Sc-21 (or Scandium) is a "one-file" highly portable bash script that can be used to perform external vulnerability assessments.
+Oxide is a "one-file" highly portable bash script that can be used to perform external vulnerability assessments.
 The script works as a wrapper around popular pen-testing tools.
 
 List of functionalities:
@@ -19,9 +19,9 @@ List of functionalities:
 Usage:
 -------------
 ```
-chmod +x sc21.sh
-./sc21.sh -d
-./sc21.sh -n Name
+chmod +x oxide.sh
+./oxide.sh -d
+./oxide.sh -n Name
 ```
 
 
