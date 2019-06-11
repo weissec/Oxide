@@ -506,6 +506,7 @@ tester() {
 		# 53 Domain Name System (DNS)
 
 			# nmap --script dns-zone-transfer IP -p Port
+			# nslookup -port=53 10.10.10.1
 
 		for line in $(awk "/domain/ && /open /" "./$pentest/services.txt"); do
 
@@ -514,7 +515,8 @@ tester() {
 
 			# run check here
 			nmap --script dns-zone-transfer $ip -p $port --host-timeout 30s > "./$pentest/scans/dns-"$ip"-"$port".txt"
-
+			echo -e "\nReverse DNS Lookup:\n" >> "./$pentest/scans/dns-"$ip"-"$port".txt"
+			nslookup -port=$port $ip >> "./$pentest/scans/dns-"$ip"-"$port".txt"
 		done
 
 	}
