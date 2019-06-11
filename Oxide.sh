@@ -530,6 +530,7 @@ tester() {
 			# nmblookup -A target
 			# smbclient //MOUNT/share -I target -N
 			# rpcclient -U "" target
+			# smbmap -H 10.10.10.10 -u null -p null
 
 		for line in $(awk "/microsoft-ds/ && /open /" "./$pentest/services.txt"); do
 
@@ -801,30 +802,30 @@ tester() {
 				# than is vulnerable
 
 
-			# 4. Dirb
+			# 4. gobuster
 			# Check if Dribuster wordlist exists and assign
-			if [ -e '/usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt' ]; then
-                		local wordpath="/usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt"
+			if [ -e '/usr/share/gobusteruster/wordlists/directory-list-2.3-medium.txt' ]; then
+                		local wordpath="/usr/share/gobusteruster/wordlists/directory-list-2.3-medium.txt"
             		else
                 		local wordpath=""
             		fi
 
 			# Check how many threads are already running
-			let conto=$(pgrep dirb | wc -l)
+			let conto=$(pgrep gobuster | wc -l)
 
 			# If above max threads loop for 5s
 			while [ $conto -gt 20 ]; do
 
 				sleep 5s
-				let conto=$(pgrep dirb | wc -l)
+				let conto=$(pgrep gobuster | wc -l)
 
 			done
 
 			# When free thread space start new scan
 			if [ $realserv = "https" ]; then
-				xterm -geometry 40x15+10+40 -e "dirb 'https://'$ip':'$port'/' $wordpath -w -o './$pentest/scans/dirb-'$ip'-'$port'.txt'" &
+				xterm -geometry 40x15+10+40 -e "gobuster -e -u 'https://'$ip':'$port'/' -w $wordpath | tee './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
 			else
-				xterm -geometry 40x15+10+40 -e "dirb 'http://'$ip':'$port'/' $wordpath -w -o './$pentest/scans/dirb-'$ip'-'$port'.txt'" &
+				xterm -geometry 40x15+10+40 -e "gobuster -e -u 'http://'$ip':'$port'/' -w $wordpath | tee './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
 			fi
 
 			# 5. Nikto
@@ -858,15 +859,15 @@ tester() {
 
 		fi
 	
-		let conto=$(pgrep dirb | wc -l)
+		let conto=$(pgrep gobuster | wc -l)
 
 		# Wait for all processes to finish
 		if [ $conto -gt 0 ]; then
 
-			echo -e " [Please wait] Waiting for all Dirb scans to finish.."
+			echo -e " [Please wait] Waiting for all gobuster scans to finish.."
 			while [ $conto -gt 0 ]; do
 				sleep 5s
-				let conto=$(pgrep dirb | wc -l)
+				let conto=$(pgrep gobuster | wc -l)
 			done
 
 		fi
@@ -1055,7 +1056,7 @@ logger() {
 			locserv dom "Sub-Domains"
 			locserv http-robots "Robots.txt File"
 			locserv nikto "NIKTO Results"
-			locserv dirb "Web Files and Directories list"
+			locserv gobuster "Web Files and Directories list"
 			# ...
 			locserv telnet "TELNET Check"
 			locserv rpc "RPC Check"
@@ -1183,7 +1184,7 @@ report() {
 			locservr dom "Sub-Domains"
 			locservr http-robots "Robots.txt File"
 			locservr nikto "NIKTO Results"
-			locservr dirb "Web Files and Directories list"
+			locservr gobuster "Web Files and Directories list"
 			# ...
 			locservr telnet "TELNET Check"
 			locservr rpc "RPC Check"
@@ -1287,10 +1288,10 @@ debug() {
 	if [ "$?" != 0 ]; then
 		required Nmap nmap
 	fi
-	# Check for dirb
-	which dirb > /dev/null 2>&1
+	# Check for gobuster
+	which gobuster > /dev/null 2>&1
 	if [ "$?" != 0 ]; then
-		required Dirb dirb
+		required Gobuster gobuster
 	fi
 	# Check for Nikto
 	which nikto > /dev/null 2>&1
@@ -1337,12 +1338,12 @@ debug() {
 		echo -e $red" [ERROR] This script must be run with BASH (sh, dash are not supported) \n"$normal
 		exit
 	fi
-	sleep 1s;
 	echo -e " # Check completed: the tool is ready to run \n"
 }
 
 testrun() {
 
+	debugger
 	setpj
 	echo "START#"$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
 	formatter
