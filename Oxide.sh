@@ -320,30 +320,13 @@ nmapscan() {
 		mkdir "./$pentest/nmap"
 	fi
 
-	# Display remaining time to console
-	repeater() {
-
-		let count=$(pgrep nmap | wc -l)
-
-		if [ $count -gt 0 ]; then
-
-			echo -ne " [-] "$(tail -n1 ./$pentest/nmap/NmapTCP.txt | grep "Timing")\\r
-
-			sleep 3s
-			repeater
-
-		fi
-
-	}
-	
 	# Tcp scan start time:
 	timestamp=$(date "+%H:%M %d/%m/%Y")
-
-	nmap -Pn -p- -n --min-hostgroup 50 --host-timeout 5h -vv -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt &
+# add -p-
+	# Can't run with time updates as it would require -vv and would change the output number of lines
+	# This would create problem in grepping the ports in the services function
+	nmap -Pn -n --min-hostgroup 50 --host-timeout 5h -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt &
 	
-	sleep 3s
-	repeater
-
 	# Tcp scan timestamp
 	echo "TCP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
 	echo -e "\n [-] TCP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
@@ -353,9 +336,6 @@ nmapscan() {
 	timestamp=$(date "+%H:%M %d/%m/%Y")
 
 	nmap -sU --top-ports 200 --min-hostgroup 50 -Pn -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapUDP.txt &
-
-	sleep 3s
-	repeater
 
 	# UDP scan timestamp (print to info.txt file)
 	echo "UDP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
@@ -538,7 +518,7 @@ tester() {
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
 
 			# run check here
-			enum4linux -a $ip > "./$pentest/scans/smb-"$ip"-"$port".txt"
+			enum4linux -a $ip | tee "./$pentest/scans/smb-"$ip"-"$port".txt" > /dev/null 2>&1
 
 		done
 
@@ -1078,14 +1058,14 @@ report() {
 	# Create a full html report
 	echo -e $green"\n [+] Generating HTML Report"$normal
 
-	echo '<!DOCTYPE html><html> <head> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> <title>Oxid - Penetration Test Report</title> </head> <style>body{background: #2f4058; font-family: sans-serif; font-size: 15px; display: flex; flex-direction: row; min-height: 100vh;}#left-panel{background: #2f4058; display: flex; flex-direction: column; align-self: flex-start; min-height: 100vh; width: 25%; min-width: 250px;}#links{flex: 1;}#right-panel{background: #1b2129; align-self: flex-end; min-height: 100vh; display: flex; flex-grow: 1;}.right-content{padding-left: 30px; color: #feffff; padding-top: 10px; width: 95%;}.right-content h1{font-weight:100;}#top-title{margin-top: 20px; color: #feffff; align-self: center; text-align: center; margin-bottom: 25px; border-bottom: 1px solid #42536a; width: 90%; padding-bottom: 20px;}#top-title h1{text-align: center; font-size: 45px; margin-bottom: 0px;font-weight:100;}#top-title p{text-align: center; color: #fff; margin-top: 0px; opacity: 0.7;}.left-item{display: flex; align-self: auto; color: #92acd3; background: #2f4058; padding-top: 10px; padding-bottom: 10px; cursor: pointer; text-decoration: none; width: 100%; padding-left: 40px;}.select, .left-item:hover{background: #243348; border-bottom: 1px solid #3b4e69;}.general{font-weight: bold; font-size: 16px;}.show{display: flex; width: 100%;}.hide{display: none;}#info{margin: 0 auto; width: 100%;}#info h1{font-weight: 100;}#footer{color: #161e27; text-align: center; margin-bottom: 30px;}#footer h3{margin-bottom: 0px;}#footer span{margin: 0px; display: block; font-size: 12px; font-weight: bold;}#footer p{margin-bottom: 5px; margin-top: 0px;}.infoline{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #849ebf;}.tile{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #f0f6ff;}.tile p{color: #849ebf; margin-top: 0px; margin-bottom: 0px;}td{padding-right: 50px;}th{text-align: left; padding-bottom: 10px; padding-right: 100px; color: #849ebf;}.target h1{margin: 0px; padding: 0px;}.target h3{color: #849ebf;}.target p{margin-bottom: 5px; padding: 0px;}hr{opacity: 0.7; border-color: #2f4058;}.ports{margin-top: 50px;}.tool{width: 100%; background: #2b384b; padding: 10px; text-align: left; text-decoration: none; border: none; cursor: pointer; font-family: inherit; color: #e5f0f5; margin-top: 4px;}.activetool, .tool:hover{background: #56749f;}.module{border: 1px solid #56749f; background: #445976; padding: 20px; display: none;}.section{margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #2e3e55;}.section span{font-weight: bold; color: #161d27;}.section p{font-size: 12px; color: #d5e4fa;}</style><body><div id="left-panel"> <div id="top-title"> <h1>Oxid</h1> <p>Penetration Test Report</p></div><div id="links"> <a class="left-item select" data="info" href="#">Details</a>' > ./$pentest/$pentest-Report.html
+	echo '<!DOCTYPE html><html> <head> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> <title>Oxide - Penetration Test Report</title> </head> <style>body{background: #2f4058; font-family: sans-serif; font-size: 15px; display: flex; flex-direction: row; min-height: 100vh;}#left-panel{background: #2f4058; display: flex; flex-direction: column; align-self: flex-start; min-height: 100vh; width: 25%; min-width: 250px;}#links{flex: 1;}#right-panel{background: #1b2129; align-self: flex-end; min-height: 100vh; display: flex; flex-grow: 1;}.right-content{padding-left: 30px; color: #feffff; padding-top: 10px; width: 95%;}.right-content h1{font-weight:100;}#top-title{margin-top: 20px; color: #feffff; align-self: center; text-align: center; margin-bottom: 25px; border-bottom: 1px solid #42536a; width: 90%; padding-bottom: 20px;}#top-title h1{text-align: center; font-size: 45px; margin-bottom: 0px;font-weight:100;}#top-title p{text-align: center; color: #fff; margin-top: 0px; opacity: 0.7;}.left-item{display: flex; align-self: auto; color: #92acd3; background: #2f4058; padding-top: 10px; padding-bottom: 10px; cursor: pointer; text-decoration: none; width: 100%; padding-left: 40px;}.select, .left-item:hover{background: #243348; border-bottom: 1px solid #3b4e69;}.general{font-weight: bold; font-size: 16px;}.show{display: flex; width: 100%;}.hide{display: none;}#info{margin: 0 auto; width: 100%;}#info h1{font-weight: 100;}#footer{color: #161e27; text-align: center; margin-bottom: 30px;}#footer h3{margin-bottom: 0px;}#footer span{margin: 0px; display: block; font-size: 12px; font-weight: bold;}#footer p{margin-bottom: 5px; margin-top: 0px;}.infoline{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #849ebf;}.tile{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #f0f6ff;}.tile p{color: #849ebf; margin-top: 0px; margin-bottom: 0px;}td{padding-right: 50px;}th{text-align: left; padding-bottom: 10px; padding-right: 100px; color: #849ebf;}.target h1{margin: 0px; padding: 0px;}.target h3{color: #849ebf;}.target p{margin-bottom: 5px; padding: 0px;}hr{opacity: 0.7; border-color: #2f4058;}.ports{margin-top: 50px;}.tool{width: 100%; background: #2b384b; padding: 10px; text-align: left; text-decoration: none; border: none; cursor: pointer; font-family: inherit; color: #e5f0f5; margin-top: 4px;}.activetool, .tool:hover{background: #56749f;}.module{border: 1px solid #56749f; background: #445976; padding: 20px; display: none;}.section{margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #2e3e55;}.section span{font-weight: bold; color: #161d27;}.section p{font-size: 12px; color: #d5e4fa;}</style><body><div id="left-panel"> <div id="top-title"> <h1>Oxide</h1> <p>Penetration Test Report</p></div><div id="links"> <a class="left-item select" data="info" href="#">Details</a>' > ./$pentest/$pentest-Report.html
 
 	# Add targets to the left menu
 	for ip in $(cat ./$pentest/targets.txt); do
 		echo '<a class="left-item" data="'$ip'" href="#">'$ip'</a>' >> ./$pentest/$pentest-Report.html
 	done
 	
-	echo '</div><div id="footer"><h3>Oxid</h3><p>Penetration Test Wrapper Tool</p><span>Version: 1.0.1</span> <span>Author: W315 (2019)</span></div></div><div id="right-panel"> <div id="info" name="info" class="show"><div class="right-content"><h1>Test Information</h1><hr><table class="tile"><tr><td><p><b>Test Name:</b></p></td>' >> ./$pentest/$pentest-Report.html
+	echo '</div><div id="footer"><h3>Oxide</h3><p>Penetration Test Wrapper Tool</p><span>Version: 1.0.1</span> <span>Author: W315 (2019)</span></div></div><div id="right-panel"> <div id="info" name="info" class="show"><div class="right-content"><h1>Test Information</h1><hr><table class="tile"><tr><td><p><b>Test Name:</b></p></td>' >> ./$pentest/$pentest-Report.html
 
 	# Add title
 	echo '<td>'$(grep "Project" "./$pentest/info.txt" | cut -d "#" -f2)'</td>' >> ./$pentest/$pentest-Report.html
