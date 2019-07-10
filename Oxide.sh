@@ -100,6 +100,8 @@ setpj() {
 
 formatter() {
 
+	# Consider if replacing with: nmap -sL -n -iL targets.txt | grep -i "scan report for" | cut -d " " -f5
+
 	banner
 	echo -e " [+] Checking targets.."
 	# Check if file exist
