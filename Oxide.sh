@@ -327,7 +327,7 @@ nmapscan() {
 # add -p-
 	# Can't run with time updates as it would require -vv and would change the output number of lines
 	# This would create problem in grepping the ports in the services function
-	nmap -Pn -n --min-hostgroup 50 --host-timeout 5h -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt &
+	nmap -Pn -n --min-hostgroup 50 --host-timeout 5h -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
 	
 	# Tcp scan timestamp
 	echo "TCP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
@@ -337,7 +337,7 @@ nmapscan() {
 	# UDP scan start time:
 	timestamp=$(date "+%H:%M %d/%m/%Y")
 
-	nmap -sU --top-ports 200 --min-hostgroup 50 -Pn -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapUDP.txt &
+	nmap -sU --top-ports 200 --min-hostgroup 50 -Pn -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapUDP.txt
 
 	# UDP scan timestamp (print to info.txt file)
 	echo "UDP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
