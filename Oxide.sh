@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# Oxide v1.0.2
+# Oxide v1.1.3
 # W315 2019
 
 # Colors:
@@ -10,27 +10,6 @@ normal="\e[0m"
 yellow="\e[33m"
 ciano="\e[36m"
 purple="\e[35m"
-
-# ---------------------------------------------------
-
-# DEV-NOTES:
-#
-# Add searchsploit search when version of service retrieved and list possible exploits
-# Add screenshots to report
-
-# Use EOF and << to send parameters to a command (for example parameters to nc:)
-
-# cat << EOF
-# This is a simple test
-# for jesus christ
-# in cape town
-# EOF
-
-# nc 10.11.1.10 443 << EOF
-# GET / HTTP/1.0
-# EOF
-
-# ---------------------------------------------------
 
 # Functions
 
@@ -324,10 +303,10 @@ nmapscan() {
 
 	# Tcp scan start time:
 	timestamp=$(date "+%H:%M %d/%m/%Y")
-# add -p-
+
 	# Can't run with time updates as it would require -vv and would change the output number of lines
 	# This would create problem in grepping the ports in the services function
-	nmap -Pn -n --min-hostgroup 50 --host-timeout 5h -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
+	nmap -Pn -n -p- --min-hostgroup 20 -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
 	
 	# Tcp scan timestamp
 	echo "TCP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
@@ -337,7 +316,7 @@ nmapscan() {
 	# UDP scan start time:
 	timestamp=$(date "+%H:%M %d/%m/%Y")
 
-	nmap -sU --top-ports 200 --min-hostgroup 50 -Pn -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapUDP.txt
+	nmap -sU --top-ports 200 --min-hostgroup 20 -Pn -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapUDP.txt
 
 	# UDP scan timestamp (print to info.txt file)
 	echo "UDP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
@@ -1148,6 +1127,11 @@ report() {
 					rm ./$pentest/tabber.tmp 
  
 				fi
+
+				if [ -e './'$pentest'/screenshots/'$ip'-'$cleanport'.png' ]; then
+					echo '<div class="section"><span>Screenshoot:</span><img src="screenshots/'$ip'-'$cleanport'.png"></div>' >> ./$pentest/$pentest-Report.html
+				fi
+				
 				
 			}
 	
@@ -1220,17 +1204,17 @@ banner() {
 usage() {
 
 	banner
-	echo " v 1.0.1"
+	echo " v 1.1.3"
 	echo " by W315 (2019) https://github.com/weissec"
 	echo
 	echo " Options:     Description:"
 	echo " -------------------------------------------------------------"
 	echo " -h           Display this help menu"
 	echo " -n [name]    Create a new project with the given name"
-	#echo " -r [name]    Resume an existing test"
-	#echo " -c [file]    Resolve CIDR Ranges to a list of IPs (input: targets file)"
-	#echo " -w [file]    Perform a whois check for targets in file (input: targets file)"
-	#echo " -p [file]    Only perform a ping sweep to check live targets (input: targets file)" 
+	# echo " -r [name]    Resume an existing test"
+	# echo " -c [file]    Resolve CIDR Ranges to a list of IPs (input: targets file)"
+	# echo " -w [file]    Perform a whois check for targets in file (input: targets file)"
+	# echo " -p [file]    Only perform a ping sweep to check live targets (input: targets file)" 
 	echo " -d           Debug, run a compatibility check"
 	echo
 	echo " usage: ./Oxide.sh -n [name]"
