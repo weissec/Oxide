@@ -292,7 +292,7 @@ whoown() {
 
 nmapscan() {
 
-	echo -e $green"\n\n [+] Running TCP Port Scan"$normal
+	echo -e $green"\n\n [+] Running TCP Port Scan (Stage 1)"$normal
 	echo " [-] NMAP Scan started ("$(date "+%H:%M %d/%m/%Y")")"
 	# create nmap folders if not exist
 	if [ ! -d "./$pentest/nmap" ]; then
@@ -304,7 +304,7 @@ nmapscan() {
 
 	# Can't run with time updates as it would require -vv and would change the output number of lines
 	# This would create problem in grepping the ports in the services function
-	nmap -Pn -n -p- --min-hostgroup 20 -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
+	nmap -Pn -n --min-hostgroup 20 -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
 	
 	# Tcp scan timestamp
 	echo "TCP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
@@ -894,6 +894,62 @@ tester() {
 
 }
 
+# Run Stage 2 Nmap
+nmapstagetwo() {
+
+	echo -e $green"\n\n [+] Running Full TCP Port Scan (Stage 2)"$normal
+	echo " [-] NMAP Scan started ("$(date "+%H:%M %d/%m/%Y")")"
+
+	# Tcp scan start time:
+	timestamp=$(date "+%H:%M %d/%m/%Y")
+
+	# Can't run with time updates as it would require -vv and would change the output number of lines
+	# This would create problem in grepping the ports in the services function
+	nmap -Pn -p- --min-hostgroup 20 -iL ./$pentest/targets.txt > ./$pentest/nmap/NmapTCP.txt
+	
+	# Tcp scan timestamp
+	echo "S2#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
+	echo -e "\n [-] TCP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
+	
+}
+
+stagetwoserv() {
+
+	# Extract services from nmap scans stage 2
+	echo -e $green'\n [+] Extracting Services'$normal
+
+	if [ -e "./$pentest/services.txt" ]; then
+		rm ./$pentest/services.txt
+	fi
+
+	# Extract Open Ports
+	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="open" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt > ./$pentest/services.txt
+	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="closed" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt >> ./$pentest/services.txt
+	awk '/Nmap scan report/ { host=$NF } NF==5 && $4=="closed" { print host, $3, $4, $NF }' ./$pentest/nmap/NmapTCP.txt >> ./$pentest/firewall-misc.txt
+	
+	echo " [-] OPEN Services: "$(grep "open" ./$pentest/services.txt | wc -l)
+	echo " [-] CLOSED Services: "$(grep "closed" ./$pentest/services.txt | wc -l)
+	echo " [-] Hosts with large number of closed ports: "$(wc -l < ./$pentest/firewall-misc.txt)
+
+}
+
+stagetwo() {
+
+    if [ "$1" = "s" ]; then
+        echo -e $green"\n [+] STAGE 2 Port Scan (Full TCP)"$normal
+        echo " [-] Would you like to run a stage 2 port scan? (Please note this can take a long time)"
+    fi
+    read -p " [?] Run STAGE 2 Nmap? (yes/no) : " dostage
+    if [ $dostage = "y" ] || [ $dostage = "yes" ]; then
+        nmapstagetwo
+        stagetwoserv
+    elif [ $dostage = "n" ] || [ $dostage = "no" ]; then
+        echo " [-] Skipping Nmap STAGE 2.."
+    else
+        echo " [*] Input Error: please choose again"
+        stagetwo
+    fi
+}
 
 logger() {
 
@@ -1302,6 +1358,11 @@ debug() {
 	if [ "$?" != 0 ]; then
 		required Sublist3r sublist3r
 	fi
+	# Check for Enum4Linux
+	which enum4linux > /dev/null 2>&1
+	if [ "$?" != 0 ]; then
+		required Enum4linux enum4linux
+	fi
 	
 	echo -e " # Check completed: the tool is ready to run \n"
 }
@@ -1317,6 +1378,7 @@ testrun() {
 	nmapscan
 	services
 	tester
+	stagetwo
 	echo "END#"$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
 	logger
 	report
