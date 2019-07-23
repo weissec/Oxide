@@ -1,15 +1,13 @@
 #!/usr/bin/bash
 
-# Oxide v1.1.3
+# Oxide v1.1.4
 # W315 2019
 
 # Colors:
 red="\e[31m"
-green="\e[32m"
+green="\e[38;5;46m"
 normal="\e[0m"
 yellow="\e[33m"
-ciano="\e[36m"
-purple="\e[35m"
 
 # Functions
 
@@ -1196,7 +1194,7 @@ banner() {
 
 	clear
 	echo -e $green
-	echo -e " O X I D E"
+	echo -e " O X 1 D E"
 	echo -e $normal
 	
 }
@@ -1204,7 +1202,7 @@ banner() {
 usage() {
 
 	banner
-	echo " v 1.1.3"
+	echo " v 1.1.4"
 	echo " by W315 (2019) https://github.com/weissec"
 	echo
 	echo " Options:     Description:"
@@ -1249,15 +1247,30 @@ debug() {
 	banner
 	echo ' # Running Debugger. Please wait.. '
 
+    # Check if ROOT
+	if [ $(id -u) != "0" ]; then
+		echo -e $red" [ERROR] This script must be run with root privileges. \n"$normal
+		exit
+	fi
+	# Check if Internet Connection active
+	ping -c 1 -w 3 www.google.com > /dev/null 2>&1
+	if [[ $? != '0' ]]; then
+	  	echo -e $yellow" [WARNING] Possible Network Error - no connection detected. \n"$normal
+	fi
+	# Check if BASH
+	if [[ $(ps -p $$ | grep bash | wc -l) = '0' ]]; then
+		echo -e $red" [ERROR] This script must be run with BASH (sh, dash are not supported) \n"$normal
+		exit
+	fi
 	# Check for nmap
 	which nmap > /dev/null 2>&1
 	if [ "$?" != 0 ]; then
 		required Nmap nmap
 	fi
-	# Check for gobuster
-	which gobuster > /dev/null 2>&1
+	# Check for dirb
+	which dirb > /dev/null 2>&1
 	if [ "$?" != 0 ]; then
-		required Gobuster gobuster
+		required Dirb dirb
 	fi
 	# Check for Nikto
 	which nikto > /dev/null 2>&1
@@ -1289,21 +1302,7 @@ debug() {
 	if [ "$?" != 0 ]; then
 		required Sublist3r sublist3r
 	fi
-	# Check if ROOT
-	if [ $(id -u) != "0" ]; then
-		echo -e $red" [ERROR] This script must be run with root privileges. \n"$normal
-		exit
-	fi
-	# Check if Internet Connection active
-	ping -c 1 -w 3 www.google.com > /dev/null 2>&1
-	if [[ $? != '0' ]]; then
-	  	echo -e $yellow" [WARNING] Possible Network Error - no connection detected. \n"$normal
-	fi
-	# Check if BASH
-	if [[ $(ps -p $$ | grep bash | wc -l) = '0' ]]; then
-		echo -e $red" [ERROR] This script must be run with BASH (sh, dash are not supported) \n"$normal
-		exit
-	fi
+	
 	echo -e " # Check completed: the tool is ready to run \n"
 }
 
