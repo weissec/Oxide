@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# Oxide v1.1.4
+# Oxide v1.2
 # W315 2019
 
 # Colors:
@@ -308,7 +308,7 @@ nmapscan() {
 	
 	# Tcp scan timestamp
 	echo "TCP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
-	echo -e "\n [-] TCP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
+	echo -e "[-] TCP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
 	echo -e $green"\n [+] Running UDP Port Scan"$normal
 	echo " [-] NMAP Scan started ("$(date "+%H:%M %d/%m/%Y")")"
 	# UDP scan start time:
@@ -318,7 +318,7 @@ nmapscan() {
 
 	# UDP scan timestamp (print to info.txt file)
 	echo "UDP#"$timestamp" - "$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
-	echo -e "\n [-] UDP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
+	echo -e "[-] UDP Scan Finished ("$(date "+%H:%M %d/%m/%Y")")"
 
 }
 
@@ -332,13 +332,17 @@ services() {
 	fi
 
 	# Extract Open Ports
-	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="open" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt > ./$pentest/services.txt
-	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="closed" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt >> ./$pentest/services.txt
+	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="open" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt > ./$pentest/services.tmp
+	awk '/Nmap scan report/ { host=$NF } NF==3 && $2=="closed" { print host, $1, $2, $NF }' ./$pentest/nmap/Nmap*.txt >> ./$pentest/services.tmp
 	awk '/Nmap scan report/ { host=$NF } NF==5 && $4=="closed" { print host, $3, $4, $NF }' ./$pentest/nmap/NmapTCP.txt >> ./$pentest/firewall-misc.txt
 	
+	# Cleanup file from ( and ) characters
+	cat ./$pentest/services.tmp | tr -d "(" | tr -d ")" > ./$pentest/services.txt
+	rm ./$pentest/services.tmp
+
 	echo " [-] OPEN Services: "$(grep "open" ./$pentest/services.txt | wc -l)
 	echo " [-] CLOSED Services: "$(grep "closed" ./$pentest/services.txt | wc -l)
-	echo " [-] Hosts with large number of closed ports: "$(wc -l < ./$pentest/firewall-misc.txt)
+	echo " [-] Unfirewalled Hosts: "$(wc -l < ./$pentest/firewall-misc.txt)
 
 }
 
@@ -349,18 +353,6 @@ tester() {
 
 	# Run specific tests based on services found
 	echo -e $green'\n [+] Checking known Services'$normal
-
-	# 25 Simple Mail Transfer Protocol (SMTP)
-
-			# VRFY username (verifies if username exists - enumeration of accounts)
-			# EXPN username (verifies if username is valid - enumeration of accounts)
-			
-			# Mail Spoof Test
-			# HELO anything 
-			# MAIL FROM: spoofed_address
-			# RCPT TO:valid_mail_account 
-			# ./$pentest Penetration Test: If you receive this email please forward it to denni.pisoni@firstbase.co.uk 
-			# QUIT
 
 	# 69 Trivial File Transfer Protocol (TFTP)
 
@@ -390,15 +382,43 @@ tester() {
 	# ms-sql	
 			# nmap -p 1433 --script ms-sql-info --script-args mssql.instance-port=1433 195.97.255.70
 
-	telnet_check() {
+	smtp_check(){
 
-		for line in $(awk "/telnet/ && /open /" "./$pentest/services.txt"); do 
+		# VRFY username (verifies if username exists - enumeration of accounts)
+		# EXPN username (verifies if username is valid - enumeration of accounts)
+		
+		# Mail Spoof Test
+		# HELO anything 
+		# MAIL FROM: spoofed_address
+		# RCPT TO:valid_mail_account 
+		# ./$pentest Penetration Test: If you receive this email please forward it to ...
+		# QUIT	
 
+		# For now just run nmap script
+		i=1
+		for line in $(awk "/smtp/ && /open /" "./$pentest/services.txt"); do
+			
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
+			echo -ne "     Checked: "$i"\\r"
+			# run check here
+			nmap --script smtp-commands.nse,smtp-enum-users.nse,smtp-open-relay.nse -p $port $ip > "./$pentest/scans/smtp-"$ip"-"$port".txt" 2>&1
+			((i++))
+		done	
+
+	}
+	
+	telnet_check() {
+		
+		i=1
+		for line in $(awk "/telnet/ && /open /" "./$pentest/services.txt"); do 
+			
+			local ip=$(echo $line | cut -d " " -f1)
+			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
+			echo -ne "     Checked: "$i"\\r"
 			nmap -p $port --script telnet-ntlm-info $ip > "./$pentest/scans/telnet-"$ip"-"$port".txt"
 			# nmap -p $port  --script telnet-brute --script-args userdb=myusers.lst,passdb=mypwds.lst,telnet-brute.timeout=8s <target>
-
+			((i++))
 		done
 
 	}
@@ -412,12 +432,12 @@ tester() {
 		# use auxiliary/scanner/ftp/anonymous
 		# msf auxiliary(anonymous) >set rhosts 192.168.0.106
 		# msf auxiliary(anonymous) >exploit
-		
+		i=1
 		for line in $(awk "/ftp/ && /open /" "./$pentest/services.txt"); do 
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# Banner retrieve
 			nmap -sV --script=banner -p $port $ip --host-timeout 30s > "./$pentest/scans/ftp-"$ip"-"$port".tmp"
 			awk "/banner:/" "./$pentest/scans/ftp-"$ip"-"$port".tmp" | cut -d ":" -f2 > "./$pentest/scans/ftp-"$ip"-"$port".txt"
@@ -425,7 +445,7 @@ tester() {
 			# Anonymous login check
 			nmap --script=ftp-anon -p $port $ip --host-timeout 30s > "./$pentest/scans/ftp-"$ip"-"$port".tmp"
 			awk "/ftp-anon:/" "./$pentest/scans/ftp-"$ip"-"$port".tmp" | cut -d ":" -f2 >> "./$pentest/scans/ftp-"$ip"-"$port".txt"
-
+			((i++))
 		done
 
 		rm "./$pentest/scans/"*".tmp"
@@ -442,18 +462,18 @@ tester() {
 			# msf auxiliary(ssh_login) >set rport 22
 			# msf auxiliary(ssh_login) > set userpass_file /root/Desktop/ssh.txt
 			# msf auxiliary(ssh_login) >exploit
-	
+		i=1
 		for line in $(awk "/ssh/ && /open /" "./"$pentest"/services.txt"); do
-
+			
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			nmap -sV --script=banner $ip -p $port --host-timeout 30s > "./"$pentest"/scans/ssh-"$ip"-"$port".tmp"
 			awk "/banner:/" "./$pentest/scans/ssh-"$ip"-"$port".tmp" | cut -d ":" -f2 > "./$pentest/scans/ssh-"$ip"-"$port".txt"
 			# add more:
 			# Brute-force check
-
+			((i++))
 		done
 
 		rm "./$pentest/scans/"*".tmp"
@@ -466,16 +486,17 @@ tester() {
 
 			# nmap --script dns-zone-transfer IP -p Port
 			# nslookup -port=53 10.10.10.1
-
+		i=1
 		for line in $(awk "/domain/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			nmap --script dns-zone-transfer $ip -p $port --host-timeout 30s > "./$pentest/scans/dns-"$ip"-"$port".txt"
 			echo -e "\nReverse DNS Lookup:\n" >> "./$pentest/scans/dns-"$ip"-"$port".txt"
 			nslookup -port=$port $ip >> "./$pentest/scans/dns-"$ip"-"$port".txt"
+			((i++))
 		done
 
 	}
@@ -490,15 +511,15 @@ tester() {
 			# smbclient //MOUNT/share -I target -N
 			# rpcclient -U "" target
 			# smbmap -H 10.10.10.10 -u null -p null
-
+		i=1
 		for line in $(awk "/microsoft-ds/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			enum4linux -a $ip | tee "./$pentest/scans/smb-"$ip"-"$port".txt" > /dev/null 2>&1
-
+			((i++))
 		done
 
 	}
@@ -514,15 +535,15 @@ tester() {
 			# finger "|/bin/id@example.com"
 
 			# Could run a small user list: "finger username@IPAddress
-
+		i=1
 		for line in $(awk "/finger/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			finger @$ip > "./$pentest/scans/finger-"$ip"-"$port".txt"
-
+			((i++))
 		done
 
 	}
@@ -535,19 +556,22 @@ tester() {
 			# snmpwalk -v2c -c public IP_Address 
 			# snmpget -v2c -c public IP_Address 
 
+		i=1
 		for line in $(awk "/snmp/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
 
-			# run check here
+			# Counter
+			echo -ne "     Checked: "$i"\\r"
 			# Check for v1 and v2c and output results in the same file
 			echo "SNMP v1:" > "./$pentest/scans/snmp-"$ip"-"$port".txt"
-			echo " ---------------------------------------------------------"
+			echo " ---------------------------------------------------------" >> "./$pentest/scans/snmp-"$ip"-"$port".txt"
 			snmp-check -p $port $ip >> "./$pentest/scans/snmp-"$ip"-"$port".txt"
 			echo "" >> "./$pentest/scans/snmp-"$ip"-"$port".txt"
 			echo "SNMP v2c:" >> "./$pentest/scans/snmp-"$ip"-"$port".txt"
 			snmp-check -p $port $ip -v2c >> "./$pentest/scans/ssl-"$ip"-"$port".txt"
+			((i++))
 
 		done
 
@@ -559,16 +583,16 @@ tester() {
 			# nmap -sU -p 123 --script ntp-info <target>
 			# ntpdc -c monlist IP_ADDRESS 
 			# ntpdc -c sysinfo IP_ADDRESS 
-
+		i=1
 		for line in $(awk "/ntp/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			nmap -sU -p $port --script ntp-info $ip --host-timeout 30s > "./$pentest/scans/ntp-"$ip"-"$port".tmp"
 			grep "|" "./$pentest/scans/ntp-"$ip"-"$port".tmp" | cut -d "|" -f2 > "./$pentest/scans/ntp-"$ip"-"$port".txt"
-
+			((i++))
 		done
 
 		rm -f "./$pentest/scans/"*".tmp"
@@ -578,14 +602,16 @@ tester() {
 	isakmp_check() {
 	
 		# 500 IKE
-
+		i=1
 		for line in $(awk "/isakmp/ && /open /" "./$pentest/services.txt"); do
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
-			ike-scan -M -A $ip > "./$pentest/scans/ike-"$ip"-"$port".txt"
-
+			echo -ne "     Checked: "$i"\\r"
+			ike-scan -M -A -id=vpn -P $ip > "./$pentest/scans/ike-"$ip"-"$port".txt"
+			# Crack the hash:
+			# psk-crack -d /path/to/dictionary /path/to/pskkey
+			((i++))
 		done
 
 	}
@@ -593,13 +619,15 @@ tester() {
 	ssl_check() {
 
 		# SSL (SSLScan)
+		i=1
 		for line in $(awk "/ssl/ && /open /" "./$pentest/services.txt"); do
-
+			
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			sslscan --show-certificate --no-colour $ip':'$port > "./$pentest/scans/ssl-"$ip"-"$port".txt" 2>&1
+			((i++))
 		done
 	
 		# Repeat for HTTPS Services
@@ -607,9 +635,10 @@ tester() {
 
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			sslscan --show-certificate --no-colour $ip':'$port > "./$pentest/scans/ssl-"$ip"-"$port".txt" 2>&1
+			((i++))
 		done
 
 	}
@@ -619,35 +648,42 @@ tester() {
 		sublister() {
 
 			# if sslscan is found run sublist3r
-			if [ -e "./"$pentest"/scans/ssl-"$ip"-"$port".txt" ]; then
+			if [ -f "./"$pentest"/scans/ssl-"$ip"-"$port".txt" ]; then
 				
 				# Extract domain name from sslscan
 				local domainame=$(grep "Subject:" "./"$pentest"/scans/ssl-"$ip"-"$port".txt" | cut -d " " -f3)
 				
-				# Remove www. if present
-				if [[ $domainame == "www"* ]]; then
+				# Remove www. and *. if present
+				if echo x"$domainame" | grep 'www.' > /dev/null; then
   					local domainame=$(echo ${domainame#www.})
+				fi
+				if echo x"$domainame" | grep '*' > /dev/null; then
+  					local domainame=$(echo ${domainame#*.})
 				fi
 
 				# run sublist3r - check for subdomains
 				sublist3r -d $domainame -o "./"$pentest"/scans/subdomains.tmp" > /dev/null 2>&1
 
-				# Print domain name found
-				echo "Domain found in Certificate: "$domainame >> "./"$pentest"/scans/dom-"$ip"-"$port".txt"
-				
+				# Print domain name found (if found)
+				if [ -z "$domainame" ]; then
+					echo "Domain found in Certificate: "$domainame >> "./"$pentest"/scans/dom-"$ip"-"$port".txt"
+				fi
+
 				# Only run if subdomains found:
-
-				if [ -e "./"$pentest"/scans/subdomains.tmp" ]; then
-
+				if [ -f "./"$pentest"/scans/subdomains.tmp" ]; then
 					# when finished resolve IP and compare with target
 					for subd in $(cat "./"$pentest"/scans/subdomains.tmp"); do
-						local inconsent=$(host $subd > /dev/null 2>&1)
-						local inconsent=$(echo $inconsent | grep "address" | cut -d " " -f4)
-						if grep -Fxq $inconsent "./"$pentest"/targets.txt"
+						local inconsent=$(dig +short $subd)
+						# If empty replace with something non-matchable
+						if [ -z "$inconsent" ]; then
+  							local inconsent="unknown"
+						fi
+
+						if grep -Fxq $inconsent "./"$pentest"/targets.txt" > /dev/null 2>&1
 						then
-							echo $subd" ("$inconsent")" >> "./"$pentest"/scans/dom-"$inconsent"-"$port".txt"
-						fi			
-					
+							echo $subd" ("$inconsent")" >> "./"$pentest"/scans/dom-"$ip"-"$port".txt"
+						fi	
+
 					done
 
 					# Clear Temp Files
@@ -660,22 +696,22 @@ tester() {
 		}
 
 		# Check if SSLScan result is present
-		
+		i=1
 		for line in $(awk "/ssl/ && /open /" "./$pentest/services.txt"); do
-
-			local ip=$(echo $line | cut -d " " -f1)
-			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
+			echo -ne "     Checked: "$i"\\r"
+			ip=$(echo $line | cut -d " " -f1)
+			port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
 			sublister
-
+			((i++))
 		done
 	
 		# Repeat for HTTPS Services
 		for line in $(awk "/https/ && /open /" "./$pentest/services.txt"); do
-
+			echo -ne "     Checked: "$i"\\r"
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
 			sublister
-
+			((i++))
 		done
 
 	}
@@ -689,9 +725,10 @@ tester() {
 		fi
 
 		# Start non-threaded checks
-		
+		i=1
 		for line in $(awk "/http/ && /open /" "./$pentest/services.txt"); do
-
+			
+			echo -ne "     Checked: "$i"\\r"
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
 			local realserv=$(echo $line | cut -d " " -f3)
@@ -702,16 +739,22 @@ tester() {
 
 			# 1. Take a screenshot of index page:
 			if [ $realserv = "https" ]; then
-				cutycapt --url='https://'$ip':'$port --out='./'$pentest'/screenshots/'$ip'-'$port'.png' --max-wait=1500 --insecure > /dev/null 2>&1
+				cutycapt --url='https://'$ip':'$port --out='./'$pentest'/screenshots/'$ip'-'$port'.png' --insecure --max-wait=2000 > /dev/null 2>&1
 			else
-				cutycapt --url='http://'$ip':'$port --out='./'$pentest'/screenshots/'$ip'-'$port'.png' --max-wait=1500 > /dev/null 2>&1
+				cutycapt --url='http://'$ip':'$port --out='./'$pentest'/screenshots/'$ip'-'$port'.png' --max-wait=2000 > /dev/null 2>&1
 			fi
 
 			# 2. Checking for robots.txt file:
 			if [ $realserv = "https" ]; then
-				curl -s "https://"$ip":"$port"/robots.txt" -k -m 6 -o "./$pentest/scans/http-robots-"$ip"-"$port".txt" > /dev/null 2>&1
+				present=$(curl "https://"$ip":"$port"/robots.txt" -Isw '%{http_code}\n' -k -o /dev/null)
+				if [ $present = "200" ]; then
+					curl -s "https://"$ip":"$port"/robots.txt" -k -m 6 -o "./$pentest/scans/http-robots-"$ip"-"$port".txt" > /dev/null 2>&1
+				fi
 			else
-				curl -s "http://"$ip":"$port"/robots.txt" -m 6 -o "./$pentest/scans/http-robots-"$ip"-"$port".txt" > /dev/null 2>&1
+				present=$(curl "http://"$ip":"$port"/robots.txt" -Isw '%{http_code}\n' -o /dev/null)
+				if [ $present = "200" ]; then
+					curl -s "http://"$ip":"$port"/robots.txt" -m 6 -o "./$pentest/scans/http-robots-"$ip"-"$port".txt" > /dev/null 2>&1
+				fi
 			fi
 
 			# 3. Retrieving Response Headers:
@@ -760,13 +803,12 @@ tester() {
 
 				# than is vulnerable
 
-
 			# 4. gobuster
 			# Check if Dribuster wordlist exists and assign
-			if [ -e '/usr/share/gobusteruster/wordlists/directory-list-2.3-medium.txt' ]; then
-                		local wordpath="/usr/share/gobusteruster/wordlists/directory-list-2.3-medium.txt"
+			if [ -f '/usr/share/wordlists/dirbuster/directory-list-2.3-small.txt' ]; then
+                		wordpath="-w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt"
             		else
-                		local wordpath=""
+				read -p "Please specify wordlist path for Gobuster: " wordpath
             		fi
 
 			# Check how many threads are already running
@@ -782,9 +824,11 @@ tester() {
 
 			# When free thread space start new scan
 			if [ $realserv = "https" ]; then
-				xterm -geometry 40x15+10+40 -e "gobuster -e -u 'https://'$ip':'$port'/' -w $wordpath | tee './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
+				echo "DIOCANE HTTPS"
+				xterm -geometry 40x15+10+40 -e "gobuster dir -e -u 'https://'$ip':'$port'/' $wordpath -o './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
 			else
-				xterm -geometry 40x15+10+40 -e "gobuster -e -u 'http://'$ip':'$port'/' -w $wordpath | tee './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
+				echo "DIOCANE HTTP"
+				xterm -geometry 40x15+10+40 -e "gobuster dir -e -u 'http://'$ip':'$port'/' $wordpath -o './$pentest/scans/gobuster-'$ip'-'$port'.txt'" &
 			fi
 
 			# 5. Nikto
@@ -801,11 +845,10 @@ tester() {
 
 			# When free thread space start new scan
 			xterm -geometry 40x15+10+40 -e "nikto -h $ip -port $port -nointeractive -output './$pentest/scans/nikto-'$ip'-'$port'.txt'" &
-
+			((i++))
 		done
 
 		# Wait for all processes to finish
-	
 		let conto=$(pgrep nikto | wc -l)
 			
 		if [ $conto -gt 0 ]; then
@@ -828,7 +871,7 @@ tester() {
 				sleep 5s
 				let conto=$(pgrep gobuster | wc -l)
 			done
-
+			
 		fi
 
 		# Clean-up: Removing white screenshots
@@ -839,14 +882,15 @@ tester() {
 	rpc_check(){
 
 		# For now just run nmap script
-
+		i=1
 		for line in $(awk "/rpcbind/ && /open /" "./$pentest/services.txt"); do
-
+			
 			local ip=$(echo $line | cut -d " " -f1)
 			local port=$(echo $line | cut -d " " -f2 | cut -d "/" -f1)
-
+			echo -ne "     Checked: "$i"\\r"
 			# run check here
 			nmap -sV -p $port $ip > "./$pentest/scans/rpc-"$ip"-"$port".txt" 2>&1
+			((i++))
 		done	
 
 	}
@@ -873,9 +917,10 @@ tester() {
 	}
 
 	# Checks list
-	serv_start TELNET telnet telnet_check
 	serv_start FTP ftp ftp_check
 	serv_start SSH ssh ssh_check
+	serv_start TELNET telnet telnet_check
+	serv_start SMTP smtp smtp_check
 	serv_start DNS domain dns_check
 	serv_start SMB microsoft-ds smb_check
 	serv_start FINGER finger finger_check
@@ -883,12 +928,12 @@ tester() {
 	serv_start NTP ntp ntp_check
 	serv_start IKE isakmp isakmp_check
 	serv_start SSL ssl ssl_check
-	serv_start "SSL-TLS (HTTPS)" https ssl_check
-	serv_start SUBDOMAINS ssl sub_check
-	serv_start "SUBDOMAINS (2)" https sub_check
-	serv_start HTTP http http_check
 	serv_start RPC rpcbind rpc_check
-
+	serv_start "SSL-TLS Configuration" https ssl_check
+	serv_start "Subdomains (stage 1)" ssl sub_check
+	serv_start "Subdomains (stage 2)" https sub_check
+	serv_start HTTP http http_check
+	
 	# End of service
 	echo -e " [-] Finished checking known services"
 
@@ -935,20 +980,21 @@ stagetwoserv() {
 
 stagetwo() {
 
-    if [ "$1" = "s" ]; then
-        echo -e $green"\n [+] STAGE 2 Port Scan (Full TCP)"$normal
-        echo " [-] Would you like to run a stage 2 port scan? (Please note this can take a long time)"
-    fi
-    read -p " [?] Run STAGE 2 Nmap? (yes/no) : " dostage
-    if [ $dostage = "y" ] || [ $dostage = "yes" ]; then
-        nmapstagetwo
-        stagetwoserv
-    elif [ $dostage = "n" ] || [ $dostage = "no" ]; then
-        echo " [-] Skipping Nmap STAGE 2.."
-    else
+	echo -e $green"\n[+] Nmap STAGE 2 Port Scan (full port scan)"$normal
+    	if [ "$1" = "s" ]; then
+        	echo -e $green"\n [+] STAGE 2 Port Scan (Full TCP)"$normal
+        	echo " [-] Would you like to run a stage 2 port scan? (Please note this can take a long time)"
+    	fi
+    	read -p " [?] Run STAGE 2 Nmap? (yes/no) : " dostage
+    	if [ $dostage = "y" ] || [ $dostage = "yes" ]; then
+        	nmapstagetwo
+        	stagetwoserv
+    	elif [ $dostage = "n" ] || [ $dostage = "no" ]; then
+        	echo " [-] Skipping Nmap STAGE 2.."
+    	else
         echo " [*] Input Error: please choose again"
-        stagetwo
-    fi
+        	stagetwo
+    	fi
 }
 
 logger() {
@@ -1065,6 +1111,9 @@ logger() {
 			locserv snmp "SNMP Information"
 			locserv finger "FINGER Details"
 			locserv ike "IKE-VPN Check"
+			locserv telnet "TELNET Check"
+			locserv rpc "RPC Check"
+			locserv smtp "SMTP Server Information"
 			# HTTP Services
 			locserv ssl "SSL/TLS Configuration"
 			locserv http-header "HTTP Response Header"
@@ -1072,9 +1121,6 @@ logger() {
 			locserv http-robots "Robots.txt File"
 			locserv nikto "NIKTO Results"
 			locserv gobuster "Web Files and Directories list"
-			# ...
-			locserv telnet "TELNET Check"
-			locserv rpc "RPC Check"
 
 			echo "" >> ./$pentest/log.txt
 		done
@@ -1093,14 +1139,19 @@ report() {
 	# Create a full html report
 	echo -e $green"\n [+] Generating HTML Report"$normal
 
-	echo '<!DOCTYPE html><html> <head> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> <title>Oxide - Penetration Test Report</title> </head> <style>body{background: #2f4058; font-family: sans-serif; font-size: 15px; display: flex; flex-direction: row; min-height: 100vh;}#left-panel{background: #2f4058; display: flex; flex-direction: column; align-self: flex-start; min-height: 100vh; width: 25%; min-width: 250px;}#links{flex: 1;}#right-panel{background: #1b2129; align-self: flex-end; min-height: 100vh; display: flex; flex-grow: 1;}.right-content{padding-left: 30px; color: #feffff; padding-top: 10px; width: 95%;}.right-content h1{font-weight:100;}#top-title{margin-top: 20px; color: #feffff; align-self: center; text-align: center; margin-bottom: 25px; border-bottom: 1px solid #42536a; width: 90%; padding-bottom: 20px;}#top-title h1{text-align: center; font-size: 45px; margin-bottom: 0px;font-weight:100;}#top-title p{text-align: center; color: #fff; margin-top: 0px; opacity: 0.7;}.left-item{display: flex; align-self: auto; color: #92acd3; background: #2f4058; padding-top: 10px; padding-bottom: 10px; cursor: pointer; text-decoration: none; width: 100%; padding-left: 40px;}.select, .left-item:hover{background: #243348; border-bottom: 1px solid #3b4e69;}.general{font-weight: bold; font-size: 16px;}.show{display: flex; width: 100%;}.hide{display: none;}#info{margin: 0 auto; width: 100%;}#info h1{font-weight: 100;}#footer{color: #161e27; text-align: center; margin-bottom: 30px;}#footer h3{margin-bottom: 0px;}#footer span{margin: 0px; display: block; font-size: 12px; font-weight: bold;}#footer p{margin-bottom: 5px; margin-top: 0px;}.infoline{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #849ebf;}.tile{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #f0f6ff;}.tile p{color: #849ebf; margin-top: 0px; margin-bottom: 0px;}td{padding-right: 50px;}th{text-align: left; padding-bottom: 10px; padding-right: 100px; color: #849ebf;}.target h1{margin: 0px; padding: 0px;}.target h3{color: #849ebf;}.target p{margin-bottom: 5px; padding: 0px;}hr{opacity: 0.7; border-color: #2f4058;}.ports{margin-top: 50px;}.tool{width: 100%; background: #2b384b; padding: 10px; text-align: left; text-decoration: none; border: none; cursor: pointer; font-family: inherit; color: #e5f0f5; margin-top: 4px;}.activetool, .tool:hover{background: #56749f;}.module{border: 1px solid #56749f; background: #445976; padding: 20px; display: none;}.section{margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #2e3e55;}.section span{font-weight: bold; color: #161d27;}.section p{font-size: 12px; color: #d5e4fa;}</style><body><div id="left-panel"> <div id="top-title"> <h1>Oxide</h1> <p>Penetration Test Report</p></div><div id="links"> <a class="left-item select" data="info" href="#">Details</a>' > ./$pentest/$pentest-Report.html
+	echo '<!DOCTYPE html><html> <head> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> <title>Oxide - Penetration Test Report</title> </head> <style>body{background: #2f4058; font-family: sans-serif; font-size: 15px; display: flex; flex-direction: row; min-height: 100vh;}#left-panel{background: #2f4058; display: flex; flex-direction: column; align-self: flex-start; min-height: 100vh; width: 25%; min-width: 250px;}#links{flex: 1;}#right-panel{background: #1b2129; min-height: 100vh; display: flex; flex-grow: 1;}.right-content{padding-left: 30px; color: #feffff; padding-top: 10px; width: 95%;}.right-content h1{font-weight:100;}#top-title{margin-top: 20px; color: #feffff; align-self: center; text-align: center; margin-bottom: 25px; border-bottom: 1px solid #42536a; width: 90%; padding-bottom: 20px;}#top-title h1{text-align: center; font-size: 45px; margin-bottom: 0px;font-weight:100;}#top-title p{text-align: center; color: #fff; margin-top: 0px; opacity: 0.7;}.left-item{display: flex; align-self: auto; color: #92acd3; background: #2f4058; padding-top: 10px; padding-bottom: 10px; cursor: pointer; text-decoration: none; width: 100%; padding-left: 40px;}.select, .left-item:hover{background: #243348; border-bottom: 1px solid #3b4e69;}.general{font-weight: bold; font-size: 16px;}.show{display: flex; width: 100%;}.hide{display: none;}#info{margin: 0 auto; width: 100%;}#info h1{font-weight: 100;}#footer{color: #161e27; text-align: center; margin-bottom: 30px;}#footer h3{margin-bottom: 0px;}#footer span{margin: 0px; display: block; font-size: 12px; font-weight: bold;}#footer p{margin-bottom: 5px; margin-top: 0px;}.infoline{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #849ebf;}.tile{display: block; width: 100%; padding-top: 20px; padding-bottom: 20px; margin-bottom: 5px; color: #f0f6ff;}.tile p{color: #849ebf; margin-top: 0px; margin-bottom: 0px;}td{padding-right: 50px;}th{text-align: left; padding-bottom: 10px; padding-right: 100px; color: #849ebf;}.target h1{margin: 0px; padding: 0px;}.target h3{color: #849ebf;}.target p{margin-bottom: 5px; padding: 0px;}hr{opacity: 0.7; border-color: #2f4058;}.ports{margin-top: 50px;}.tool{width: 100%; background: #2b384b; padding: 10px; text-align: left; text-decoration: none; border: none; cursor: pointer; font-family: inherit; color: #e5f0f5; margin-top: 4px;}.activetool, .tool:hover{background: #56749f;}.module{border: 1px solid #56749f; background: #445976; padding: 20px; display: none;}.section{margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #2e3e55;}.section span{display: block; font-weight: bold; color: #161d27; padding-bottom: 5px}.section p{font-size: 12px; color: #d5e4fa;}</style><body><div id="left-panel"> <div id="top-title"> <h1>Oxide</h1> <p>Penetration Test Report</p></div><div id="links"> <a class="left-item select" data="info" href="#">Details</a>' > ./$pentest/$pentest-Report.html
 
 	# Add targets to the left menu
 	for ip in $(cat ./$pentest/targets.txt); do
-		echo '<a class="left-item" data="'$ip'" href="#">'$ip'</a>' >> ./$pentest/$pentest-Report.html
+	# Check if there are any services
+	if grep -q "$ip" ./$pentest/services.txt; then
+    		echo '<a class="left-item" data="'$ip'" href="#">'$ip'</a>' >> ./$pentest/$pentest-Report.html
+	else
+		echo '<a class="left-item" data="'$ip'" href="#">'$ip' (Unresponsive)</a>' >> ./$pentest/$pentest-Report.html
+	fi
 	done
 	
-	echo '</div><div id="footer"><h3>Oxide</h3><p>Penetration Test Wrapper Tool</p><span>Version: 1.0.1</span> <span>Author: W315 (2019)</span></div></div><div id="right-panel"> <div id="info" name="info" class="show"><div class="right-content"><h1>Test Information</h1><hr><table class="tile"><tr><td><p><b>Test Name:</b></p></td>' >> ./$pentest/$pentest-Report.html
+	echo '</div><div id="footer"><h3>Oxide</h3><p>Penetration Test Wrapper</p><span>Version: 1.2</span> <span>Author: W315 (2019)</span></div></div><div id="right-panel"> <div id="info" name="info" class="show"><div class="right-content"><h1>Test Information</h1><hr><table class="tile"><tr><td><p><b>Test Name:</b></p></td>' >> ./$pentest/$pentest-Report.html
 
 	# Add title
 	echo '<td>'$(grep "Project" "./$pentest/info.txt" | cut -d "#" -f2)'</td>' >> ./$pentest/$pentest-Report.html
@@ -1171,7 +1222,7 @@ report() {
 				
 				if [ -e ./$pentest/scans/$1-$ip-$cleanport.txt ]; then
 					
-					# Format output				    
+					# Format output	(remove tags and add newlines in html)			    
 					cat ./$pentest/scans/$1-$ip-$cleanport.txt > ./$pentest/tabber.tmp
 					# sed -i 's/^/\t/' ./$pentest/tabber.tmp  <-- used to add tab
 					sed -i 's/[<>]//g' ./$pentest/tabber.tmp
@@ -1179,25 +1230,33 @@ report() {
 
 					echo '<div class="section"><span>'$2':</span><p>'$(cat ./$pentest/tabber.tmp)'</p></div>' >> ./$pentest/$pentest-Report.html
 					rm ./$pentest/tabber.tmp 
- 
+
 				fi
 
-				if [ -e './'$pentest'/screenshots/'$ip'-'$cleanport'.png' ]; then
-					echo '<div class="section"><span>Screenshoot:</span><img src="screenshots/'$ip'-'$cleanport'.png"></div>' >> ./$pentest/$pentest-Report.html
-				fi
-				
-				
 			}
-	
+
+			# Adding all screenshots (to fix)
+			if ls './'$pentest'/screenshots/'$ip'-'$cleanport'.png' 1> /dev/null 2>&1; then
+				echo '<div class="section"><span>Screenshots:</span>' >> ./$pentest/$pentest-Report.html
+				for imgfile in './'$pentest'/screenshots/'$ip'-'$cleanport; do
+					imgfile=$(echo $imgfile | awk -F'/' '{print $(NF-0)}')
+					echo '<img src="screenshots/'$imgfile'">' >> ./$pentest/$pentest-Report.html
+				done
+				echo '</div>' >> ./$pentest/$pentest-Report.html
+			fi
+
 			# Service List (call function above which print results in log)
 			locservr ntp "NTP Information"
 			locservr ssh "SSH Banner"
+			locservr smtp "SMTP Server Information"
 			locservr ftp "FTP Information"
 			locservr dns "DNS Information"
 			locservr smb "SMB Check"
 			locservr snmp "SNMP Information"
 			locservr finger "FINGER Details"
 			locservr ike "IKE-VPN Check"
+			locservr telnet "TELNET Check"
+			locservr rpc "RPC Check"
 			# HTTP Services
 			locservr ssl "SSL/TLS Configuration"
 			locservr http-header "HTTP Response Header"
@@ -1205,9 +1264,6 @@ report() {
 			locservr http-robots "Robots.txt File"
 			locservr nikto "NIKTO Results"
 			locservr gobuster "Web Files and Directories list"
-			# ...
-			locservr telnet "TELNET Check"
-			locservr rpc "RPC Check"
 
 			echo '</div>' >> ./$pentest/$pentest-Report.html
 
@@ -1249,16 +1305,19 @@ theend() {
 banner() { 
 
 	clear
-	echo -e $green
-	echo -e " O X 1 D E"
-	echo -e $normal
+echo -e $green"    ____   _  __   __  ____    ______ "
+echo -e "   / __ \ | |/ /  / / / __ \  / ____/ "
+echo -e "  / / / / |   /  / / / / / / / __/    "
+echo -e " / /_/ / /   |  / / / /_/ / / /__     "
+echo -e " \____/ /_/|_| /_/ /_____/ /_____/ v1.2"
+echo -e $normal
 	
 }
 
 usage() {
 
 	banner
-	echo " v 1.1.4"
+	echo " v 1.2"
 	echo " by W315 (2019) https://github.com/weissec"
 	echo
 	echo " Options:     Description:"
@@ -1269,9 +1328,10 @@ usage() {
 	# echo " -c [file]    Resolve CIDR Ranges to a list of IPs (input: targets file)"
 	# echo " -w [file]    Perform a whois check for targets in file (input: targets file)"
 	# echo " -p [file]    Only perform a ping sweep to check live targets (input: targets file)" 
-	echo " -d           Debug, run a compatibility check"
+	echo " -d           Debug, run a compatibility check (recommended)"
 	echo
-	echo " usage: ./Oxide.sh -n [name]"
+	echo " usage: ./Oxide.sh -d"
+	echo " usage: ./Oxide.sh -n <test-name>"
 	echo
 
 }
@@ -1369,7 +1429,9 @@ debug() {
 
 testrun() {
 
-	debugger
+	pentest="ExtInfra"
+
+	#debugger
 	setpj
 	echo "START#"$(date "+%H:%M %d/%m/%Y") >> "./$pentest/info.txt"
 	formatter
