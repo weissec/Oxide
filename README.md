@@ -4,7 +4,7 @@ Pentesting Bash Wrapper to enumerate external services from a list of provided h
 XNetNum is a "one-file", highly portable bash script that can be used to perform external vulnerability assessments.
 The script works as a wrapper around popular pen-testing tools.
 
-List of functionalities:
+####List of functionalities:
 - Live hosts discovery
 - Targets Ownership (whois)
 - Port discovery (TCP/UDP)
