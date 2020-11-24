@@ -1,7 +1,7 @@
-# O X I D E
-Pentesting Bash Wrapper
+# XNETNUM
+Pentesting Bash Wrapper to enumerate external services from a list of provided hosts.
 
-Oxide is a "one-file" highly portable bash script that can be used to perform external vulnerability assessments.
+XNetNum is a "one-file", highly portable bash script that can be used to perform external vulnerability assessments.
 The script works as a wrapper around popular pen-testing tools.
 
 List of functionalities:
@@ -19,9 +19,9 @@ List of functionalities:
 Usage:
 -------------
 ```
-chmod +x oxide.sh
-./oxide.sh -d
-./oxide.sh -n Name
+chmod +x xnetnum.sh
+./xnetnum.sh -h
+./xnetnum.sh -n Name
 ```
 
 
